@@ -368,7 +368,7 @@
                 </button>
             </div>
 
-            <input type="file" id="imageInput" accept="image/*">
+            <input type="file" id="imageInput" accept="image/*" multiple>
 
             <!-- Preview imagen -->
             <div id="ocr-preview-wrap">
@@ -521,196 +521,189 @@
         document.getElementById('pill-s2').classList.toggle('active', sem === 's2');
     }
 
-    document.getElementById('imageInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+    document.getElementById('imageInput').addEventListener('change', async function(e) {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
 
-        // Mostrar preview
-        const previewWrap = document.getElementById('ocr-preview-wrap');
-        const preview = document.getElementById('ocr-preview');
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            preview.src = ev.target.result;
-            previewWrap.style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-
-        // Reset resultados anteriores
+        // Reset
         pendingOCRResults = [];
         document.getElementById('ocr-results').style.display = 'none';
+        document.getElementById('ocr-preview-wrap').style.display = 'none';
 
-        // Mostrar status y barra
         const status = document.getElementById('ocr-status');
         const progressWrap = document.getElementById('ocr-progress-wrap');
         const progressBar = document.getElementById('ocr-progress-bar');
 
         status.style.display = 'block';
         status.style.color = 'var(--accent-blue)';
-        status.innerText = '🔍 Analizando imagen...';
         progressWrap.style.display = 'block';
         progressBar.style.width = '0%';
 
-        Tesseract.recognize(file, 'spa', {
-            logger: m => {
-                if (m.status === 'recognizing text' || m.status === 'recognizing-text') {
-                    const pct = Math.round(m.progress * 100);
-                    status.innerText = `Procesando: ${pct}%`;
-                    progressBar.style.width = pct + '%';
-                } else if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata') {
-                    status.innerText = '⏳ Cargando motor OCR...';
-                }
+        let allResults = [];
+
+        for (let f = 0; f < files.length; f++) {
+            const file = files[f];
+            status.innerText = files.length > 1
+                ? `🔍 Procesando imagen ${f + 1} de ${files.length}...`
+                : '🔍 Analizando imagen...';
+
+            try {
+                const { data: { text } } = await Tesseract.recognize(file, 'spa', {
+                    logger: m => {
+                        if (m.status === 'recognizing text' || m.status === 'recognizing-text') {
+                            // Progreso global considerando todas las imágenes
+                            const globalPct = Math.round(((f + m.progress) / files.length) * 100);
+                            progressBar.style.width = globalPct + '%';
+                            if (files.length === 1) status.innerText = `Procesando: ${Math.round(m.progress * 100)}%`;
+                        }
+                    }
+                });
+                const results = extractGradesFromText(text);
+                allResults = allResults.concat(results);
+            } catch (err) {
+                console.error('Error en imagen', f + 1, err);
             }
-        }).then(({ data: { text } }) => {
-            progressBar.style.width = '100%';
-            const found = processOCRText(text);
+        }
 
-            if (found > 0) {
-                status.style.color = 'var(--accent-green)';
-                status.innerText = `✅ Se detectaron ${found} nota(s). Revísalas abajo.`;
-            } else {
-                status.style.color = 'var(--accent-red)';
-                status.innerText = '⚠️ No se detectaron notas. Intenta con una imagen más clara.';
-            }
+        progressBar.style.width = '100%';
 
-            setTimeout(() => { progressWrap.style.display = 'none'; }, 1000);
-
-            // Reset input para permitir subir la misma imagen de nuevo
-            e.target.value = '';
-        }).catch(err => {
+        if (allResults.length > 0) {
+            status.style.color = 'var(--accent-green)';
+            status.innerText = `✅ ${allResults.length} nota(s) detectadas en ${files.length} imagen(es). Revísalas abajo.`;
+        } else {
             status.style.color = 'var(--accent-red)';
-            status.innerText = '❌ Error al procesar la imagen.';
-            progressWrap.style.display = 'none';
-            console.error(err);
-        });
+            status.innerText = '⚠️ No se detectaron notas. Intenta con imágenes más claras.';
+        }
+
+        pendingOCRResults = allResults;
+        renderOCRResults();
+        setTimeout(() => { progressWrap.style.display = 'none'; }, 1000);
+        e.target.value = '';
     });
 
-    function processOCRText(rawText) {
+    function extractGradesFromText(rawText) {
         /*
-         * Formato NotasNet (según captura real):
+         * Formato real de NotasNet (verificado con captura):
          *
-         *   Línea A: número de evaluación o etiqueta  →  "1"  "2"  "4"  "P"
-         *   Línea B: ponderación                      →  "100%"  "100%"  ...
-         *   Línea C: nota                             →  "6.6"  "7.0"  "6.8"
+         *   Fila 1 (etiquetas):   1    2    4    P
+         *   Fila 2 (ponderación): 100% 100% 100% 100%
+         *   Fila 3 (notas):       6.6  7.0  6.8  6.8
          *
-         * Tesseract suele leer de izq a derecha y de arriba a abajo,
-         * entregando algo como:
-         *   "1  2  4  P"      (o en líneas separadas)
-         *   "100%  100%  100%  100%"
-         *   "6.6  7.0  6.8  6.8"
+         * Tesseract puede leer "7.0" como "7" o "7,0" o "70" → normalizamos.
+         * La columna "P" (y PP, PA) es promedio → excluir.
          *
          * Estrategia:
-         *   1. Limpiar el texto completo.
-         *   2. Detectar la materia en cualquier línea.
-         *   3. Recoger TODAS las notas válidas (1.0–7.0) que aparezcan
-         *      en una línea donde también haya un '%' (ponderación),
-         *      O en la línea inmediatamente siguiente a una línea con '%'.
-         *   4. Excluir bloques marcados con "P" o "PP" o "PA" (promedios).
+         *   - Buscar la línea de etiquetas (contiene P y números de evaluación)
+         *   - Buscar la línea de porcentajes (contiene %)
+         *   - Buscar la línea de notas (contiene decimales 1-7)
+         *   - Alinear por índice de columna y excluir las marcadas como promedio
+         *   - Detectar materia en cualquier línea del texto
          */
 
         const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        let currentSubjectIdx = -1;
-        const detectedResults = [];
+        const results = [];
+        const promedioLabels = new Set(['P', 'PP', 'PA', 'PF', 'PROM', 'PROMEDIO']);
 
-        // Detectar índices de líneas que son "de promedio" (etiqueta P/PP/PA)
-        // En NotasNet la etiqueta aparece ANTES del % y la nota.
-        // Marcamos qué posiciones en el texto corresponden a promedios.
-
-        // Paso 1: detectar materia en el texto completo primero
-        lines.forEach(line => {
+        // Detectar materia (recorrer todas las líneas)
+        let subjectIdx = -1;
+        for (const line of lines) {
             const idx = findBestSubject(line);
-            if (idx !== -1) currentSubjectIdx = idx;
-        });
+            if (idx !== -1) { subjectIdx = idx; break; }
+        }
+        if (subjectIdx === -1) return results;
 
-        // Paso 2: construir grupos de 3 líneas (etiqueta / % / nota)
-        // trabajando sobre el texto completo tokenizado
-        const fullText = lines.join('\n');
+        // Función para tokenizar una línea en columnas
+        const tokenize = (line) => line.split(/\s{2,}|\t/).map(t => t.trim()).filter(t => t.length > 0);
 
-        // Extraer todos los tokens de nota que tengan un % en contexto cercano
-        // Buscamos bloques: [etiqueta]\n[N%]\n[nota] donde etiqueta != P/PP/PA/Finales
-        // También manejamos cuando vienen en la misma línea: "6.6 7.0 6.8"
-        // junto a una línea de porcentajes "100% 100% 100%"
+        // Normalizar un token a nota (maneja "7", "7.0", "7,0", "70")
+        function toGrade(tok) {
+            let s = tok.replace(',', '.');
+            // "70" → 7.0
+            if (/^\d{2}$/.test(s)) {
+                const n = parseInt(s);
+                if (n >= 10 && n <= 70) s = (n / 10).toFixed(1);
+            }
+            const n = parseFloat(s);
+            return (n >= 1.0 && n <= 7.0) ? n : null;
+        }
 
-        // Estrategia simplificada y robusta:
-        // Recorrer líneas buscando líneas de porcentajes, luego tomar
-        // la línea anterior y la siguiente para extraer notas,
-        // excluyendo las que estén bajo etiquetas P/PP/PA.
-
+        // Buscar grupos: línea de etiquetas + línea de % + línea de notas
+        // Recorremos buscando la línea de % como ancla
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
+            if (!line.includes('%')) continue;
 
-            // Actualizar materia si esta línea la contiene
-            const subIdx = findBestSubject(line);
-            if (subIdx !== -1) currentSubjectIdx = subIdx;
+            // Línea de etiquetas: la anterior que contenga P o números solos
+            const labelLine = i > 0 ? lines[i - 1] : '';
+            const labelTokens = labelLine.toUpperCase().split(/\s+/).filter(t => t.length > 0);
+            const isPromCol = labelTokens.map(t => promedioLabels.has(t));
 
-            // ¿Es esta una línea de porcentajes?
-            const isPctLine = (line.match(/%/g) || []).length >= 1 && !/[1-7]\.[0-9]/.test(line);
-            if (!isPctLine) continue;
-            if (currentSubjectIdx === -1) continue;
-
-            // Contar cuántos % hay → cuántas evaluaciones en este grupo
+            // Contar cuántos % hay en esta línea
             const pctCount = (line.match(/%/g) || []).length;
 
-            // Buscar la línea de etiquetas (anterior) para detectar columnas P/PP/PA
-            const labelLine = i > 0 ? lines[i - 1] : '';
-            // Tokenizar etiquetas: separar por espacios
-            const labelTokens = labelLine.toUpperCase().split(/\s+/).filter(t => t.length > 0);
-            // Índices de columnas que son promedios
-            const promedioLabels = new Set(['P', 'PP', 'PA', 'PF', 'PROM']);
-            const isPromedioCol = labelTokens.map(t => promedioLabels.has(t));
-
-            // Buscar la línea de notas (siguiente que contenga notas)
+            // Buscar línea de notas: siguiente línea que tenga números tipo nota
+            // Acepta: "6.6", "6,6", "7.0", "7", "70"
+            const notePattern = /\b([1-7][.,][0-9]|[1-7](?!\d)|[1-7][0-9](?!\d))\b/;
             let noteLine = '';
-            for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
-                if (/[1-7][.,][0-9]/.test(lines[j])) {
+            let noteLineIdx = -1;
+            for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+                if (notePattern.test(lines[j]) && !lines[j].includes('%')) {
                     noteLine = lines[j];
+                    noteLineIdx = j;
                     break;
                 }
             }
             if (!noteLine) continue;
 
-            // Extraer notas de la línea de notas
-            const noteTokens = noteLine.match(/[1-7][.,][0-9]/g) || [];
+            // Extraer todos los tokens de nota de esa línea
+            // Separar por 2+ espacios primero (columnas), sino por espacio simple
+            let noteTokens = tokenize(noteLine);
+            if (noteTokens.length < pctCount) {
+                noteTokens = noteLine.split(/\s+/).filter(t => t.length > 0);
+            }
 
-            noteTokens.forEach((token, colIdx) => {
-                // Si la columna corresponde a un promedio, saltar
-                if (isPromedioCol[colIdx]) return;
+            noteTokens.forEach((tok, colIdx) => {
+                // Saltar columnas de promedio
+                if (isPromCol[colIdx]) return;
 
-                const grade = parseFloat(token.replace(',', '.'));
-                if (grade < 1.0 || grade > 7.0) return;
+                const grade = toGrade(tok);
+                if (grade === null) return;
 
-                // Evitar duplicados
-                const isDup = detectedResults.some(r =>
-                    r.subjectIdx === currentSubjectIdx && r.grade === grade
-                );
-                // Permitir duplicados solo si la nota es diferente
-                // (ej: 6.8 puede aparecer varias veces legítimamente)
-                // → guardar todas, el usuario decide
-                detectedResults.push({
-                    subjectIdx: currentSubjectIdx,
-                    grade: grade,
-                    added: false
-                });
+                results.push({ subjectIdx, grade, added: false });
             });
+
+            // Saltar la línea de notas ya procesada
+            i = noteLineIdx;
         }
 
-        // Fallback: si no se encontró nada con la lógica de bloques,
-        // intentar extraer notas de cualquier línea que tenga % en la misma línea
-        if (detectedResults.length === 0 && currentSubjectIdx !== -1) {
-            lines.forEach(line => {
-                if (!/%/.test(line)) return;
-                const tokens = line.match(/[1-7][.,][0-9]/g) || [];
-                tokens.forEach(token => {
-                    const grade = parseFloat(token.replace(',', '.'));
+        // Fallback: si no encontramos nada, buscar cualquier número 1-7 con decimal
+        // en líneas que tengan % cerca (misma línea o adyacente)
+        if (results.length === 0) {
+            for (let i = 0; i < lines.length; i++) {
+                const hasPct = lines[i].includes('%') ||
+                    (i > 0 && lines[i-1].includes('%')) ||
+                    (i < lines.length-1 && lines[i+1].includes('%'));
+                if (!hasPct) continue;
+
+                const tokens = lines[i].match(/[1-7][.,][0-9]/g) || [];
+                tokens.forEach(tok => {
+                    const grade = parseFloat(tok.replace(',', '.'));
                     if (grade >= 1.0 && grade <= 7.0) {
-                        detectedResults.push({ subjectIdx: currentSubjectIdx, grade, added: false });
+                        results.push({ subjectIdx, grade, added: false });
                     }
                 });
-            });
+            }
         }
 
-        pendingOCRResults = detectedResults;
+        return results;
+    }
+
+    // Wrapper para compatibilidad con el flujo anterior
+    function processOCRText(rawText) {
+        const results = extractGradesFromText(rawText);
+        pendingOCRResults = results;
         renderOCRResults();
-        return detectedResults.length;
+        return results.length;
     }
 
     function renderOCRResults() {
