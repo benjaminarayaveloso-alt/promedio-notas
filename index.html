@@ -180,9 +180,18 @@
         "Antropología", "Promoción de vida saludable", "Estética y Política", "Geografía"
     ];
 
+    // Sinónimos para ayudar a la IA
+    const aliases = {
+        0: ["lenguaje", "lengua", "literatura"],
+        1: ["mate", "matematica", "mates"],
+        4: ["ciencias ciudadanas", "ciencias"],
+        5: ["educacion ciudadana", "ciudadania"],
+        6: ["educacion fisica", "gimnasia", "deporte", "fisica"],
+        11: ["geografia"]
+    };
+
     let data = JSON.parse(localStorage.getItem('grades_v4')) || { s1: {}, s2: {} };
 
-    // --- MEJORA IPHONE: INSTANCIA GLOBAL ---
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
 
@@ -205,6 +214,58 @@
 
     const round5 = (v) => Math.round((v + Number.EPSILON) * 10) / 10;
 
+    // --- UTILIDADES DE INTELIGENCIA ---
+    const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+    function parseGrade(text) {
+        const numMap = {"uno":1,"dos":2,"tres":3,"cuatro":4,"cinco":5,"seis":6,"siete":7};
+        let t = text;
+        Object.keys(numMap).forEach(key => t = t.replace(new RegExp(key, 'g'), numMap[key]));
+        
+        let clean = t.replace(',', '.').replace(/ y /g, '.').replace(/ coma /g, '.').replace(/ punto /g, '.');
+        let match = clean.match(/\d+(\.\d+)?/);
+        if (!match) return null;
+        
+        let n = parseFloat(match[0]);
+        if (n > 10 && n <= 70) n /= 10; // "sesenta y cinco" -> 6.5
+        return (n >= 1 && n <= 7) ? n : null;
+    }
+
+    function findBestSubject(text) {
+        let bestIdx = -1;
+        let maxScore = 0;
+        const cleanInput = normalize(text);
+
+        subjects.forEach((name, i) => {
+            let score = 0;
+            const nName = normalize(name);
+            
+            // Si la frase exacta está en el texto (ej: "educacion ciudadana")
+            if (cleanInput.includes(nName)) score += 10;
+            
+            // Por cada palabra coincidente
+            const words = nName.split(' ');
+            words.forEach(w => {
+                if (w.length > 3 && cleanInput.includes(w)) score += 2;
+            });
+
+            // Revisar alias
+            if (aliases[i]) {
+                aliases[i].forEach(alias => {
+                    if (cleanInput.includes(normalize(alias))) score += 5;
+                });
+            }
+
+            if (score > maxScore) {
+                maxScore = score;
+                bestIdx = i;
+            }
+        });
+
+        return maxScore > 1 ? bestIdx : -1;
+    }
+
+    // --- FUNCIONES CORE ---
     function render() {
         ['s1', 's2'].forEach(sem => {
             const cont = document.getElementById(`container-${sem}`);
@@ -261,17 +322,11 @@
         document.getElementById('res-anual').innerText = fa.toFixed(1);
     }
 
-    // --- FUNCIÓN DE VOZ OPTIMIZADA ---
     function toggleVoice() {
-        if (!recognition) {
-            alert("Tu navegador no soporta reconocimiento de voz. Usa Safari en iPhone.");
-            return;
-        }
-
+        if (!recognition) return alert("Micro no soportado");
         const btn = document.getElementById('siri-btn');
         const status = document.getElementById('voice-status');
 
-        // Configurar eventos
         recognition.onstart = () => { 
             btn.classList.add('listening'); 
             status.style.display = 'block';
@@ -279,39 +334,17 @@
         };
 
         recognition.onresult = (e) => {
-            let text = e.results[0][0].transcript.toLowerCase();
-            status.innerText = `Dijo: "${text}"`;
-            
-            // Lógica de mapeo de números
-            const numMap = {"uno":1,"dos":2,"tres":3,"cuatro":4,"cinco":5,"seis":6,"siete":7};
-            Object.keys(numMap).forEach(key => {
-                text = text.replace(new RegExp(key, 'g'), numMap[key]);
-            });
+            const rawText = e.results[0][0].transcript;
+            const grade = parseGrade(rawText);
+            const idx = findBestSubject(rawText);
+            const sem = rawText.toLowerCase().includes('segundo') || rawText.includes(' 2') ? 's2' : 's1';
 
-            let cleanText = text.replace(',', '.').replace(' y ', '.').replace(' coma ', '.').replace(' punto ', '.');
-            let gradeMatch = cleanText.match(/\d+(\.\d+)?/);
-            let grade = gradeMatch ? parseFloat(gradeMatch[0]) : null;
-
-            if (grade && grade > 10 && grade <= 70) grade /= 10;
-
-            let idx = -1;
-            if (text.includes("historia")) idx = 3;
-            else if (text.includes("geografía") && !text.includes("historia")) idx = 11;
-            else if (text.includes("ciencias") && (text.includes("ciudadanía") || text.includes("ciudadana"))) idx = 4;
-            else {
-                subjects.forEach((s, i) => {
-                    const words = s.toLowerCase().split(' ');
-                    words.forEach(w => { if(w.length > 3 && text.includes(w)) idx = i; });
-                });
-            }
-
-            if (idx !== -1 && grade >= 1 && grade <= 7) {
-                const sem = text.includes('segundo') || text.includes('2') ? 's2' : 's1';
+            if (idx !== -1 && grade) {
                 data[sem][idx].push(grade);
                 save(); render();
                 status.innerText = `✅ ${subjects[idx]}: ${grade.toFixed(1)}`;
             } else {
-                status.innerText = "❌ No entendí bien";
+                status.innerText = "❌ No entendí (Ej: 'Matemática un 6.5')";
             }
         };
 
@@ -320,18 +353,7 @@
             setTimeout(() => status.style.display = 'none', 3000);
         };
 
-        recognition.onerror = (event) => {
-            btn.classList.remove('listening');
-            status.innerText = "Error: " + event.error;
-            console.error("Error micro:", event.error);
-        };
-
-        // Iniciar o detener según estado
-        try {
-            recognition.start();
-        } catch (e) {
-            recognition.stop();
-        }
+        try { recognition.start(); } catch (e) { recognition.stop(); }
     }
 
     init();
