@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Mis Notas">
-    <title>Gestor de Notas - Benjamín</title>
+    <title>Mis Notas - Benjamín</title>
     <style>
         :root {
             --bg-color: #000000;
@@ -28,17 +27,14 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0;
             padding: 20px;
-            padding-bottom: 180px; /* Espacio para panel y botón */
+            padding-bottom: 180px;
         }
 
         .container { max-width: 900px; margin: 0 auto; }
-
-        /* CABECERA ESTILO IOS */
-        .header { margin-bottom: 30px; padding-top: 10px; }
+        .header { margin-bottom: 30px; }
         .header h1 { font-size: 34px; font-weight: 700; margin: 0; }
-        .header p { color: var(--text-secondary); margin: 5px 0 0; font-size: 17px; }
+        .header p { color: var(--text-secondary); margin: 5px 0 0; }
 
-        /* GRID RESPONSIVO */
         .semester-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -50,12 +46,8 @@
             font-weight: 600;
             margin-bottom: 15px;
             color: var(--accent-blue);
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
 
-        /* TARJETAS */
         .subject-card {
             background-color: var(--card-color);
             border-radius: 14px;
@@ -65,94 +57,80 @@
         }
 
         .subject-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-        .subject-title-area h3 { font-size: 17px; margin: 0; font-weight: 600; }
-        .avg-display { text-align: right; }
-        .avg-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
-        .avg-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; }
+        .subject-title-area h3 { font-size: 16px; margin: 0; font-weight: 600; max-width: 70%; }
+        .avg-value { font-size: 24px; font-weight: 700; }
 
         .add-note-area {
             display: flex; gap: 8px; margin-bottom: 12px;
-            background: #2c2c2e; padding: 8px; border-radius: 10px;
+            background: #2c2c2e; padding: 6px; border-radius: 10px;
         }
 
         .add-note-area input {
-            flex: 1; background: transparent; border: none; color: white; font-size: 16px; outline: none;
+            flex: 1; background: transparent; border: none; color: white; font-size: 16px; outline: none; padding-left: 10px;
         }
 
         .add-note-area button {
             background: var(--accent-blue); color: white; border: none;
-            width: 30px; height: 30px; border-radius: 15px; font-weight: bold;
+            width: 34px; height: 34px; border-radius: 10px; font-weight: bold;
         }
 
         .grades-container { display: flex; flex-wrap: wrap; gap: 8px; }
         .grade-box {
             background: #252525; border: 1px solid var(--border-color);
-            border-radius: 8px; width: 42px; height: 42px;
+            border-radius: 8px; width: 44px; height: 44px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             position: relative;
         }
         .grade-val { font-weight: 600; font-size: 15px; }
-        .grade-num { font-size: 8px; color: var(--text-secondary); margin-bottom: 2px; }
+        .grade-num { font-size: 8px; color: var(--text-secondary); }
 
         .delete-grade {
-            position: absolute; top: -6px; right: -6px;
+            position: absolute; top: -8px; right: -8px;
             background: var(--accent-red); color: white; border: none;
-            border-radius: 50%; width: 18px; height: 18px; font-size: 12px;
+            border-radius: 50%; width: 20px; height: 20px; font-size: 14px;
         }
 
-        /* BOTÓN SIRI STYLE */
         .voice-trigger-container {
-            position: fixed; bottom: 100px; left: 50%;
+            position: fixed; bottom: 110px; left: 50%;
             transform: translateX(-50%); z-index: 1000;
-            text-align: center;
+            text-align: center; width: 100%;
         }
 
         #siri-btn {
-            width: 65px; height: 65px; border-radius: 50%;
+            width: 70px; height: 70px; border-radius: 50%;
             background: var(--siri-gradient);
             border: none; cursor: pointer;
             box-shadow: 0 0 20px rgba(0, 210, 255, 0.4);
             display: flex; align-items: center; justify-content: center;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin: 0 auto;
         }
 
-        #siri-btn.listening {
-            transform: scale(1.2);
-            box-shadow: 0 0 40px rgba(174, 0, 255, 0.6);
-            animation: pulse 1.5s infinite;
-        }
+        #siri-btn.listening { animation: pulse 1.2s infinite linear; }
 
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(174, 0, 255, 0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(174, 0, 255, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(174, 0, 255, 0); }
+            0% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.1); filter: brightness(1.3); }
+            100% { transform: scale(1); filter: brightness(1); }
         }
 
         #voice-status {
-            margin-top: 10px; font-size: 14px; color: white;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-            background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px;
-            display: none;
+            margin: 15px auto; font-size: 14px; color: white;
+            background: rgba(44, 44, 46, 0.9); padding: 8px 20px; border-radius: 20px;
+            width: fit-content; display: none; border: 1px solid var(--border-color);
         }
 
-        /* PANEL RESUMEN FIJO */
         .summary-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
-            background: rgba(28, 28, 30, 0.9); backdrop-filter: blur(20px);
+            background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(20px);
             border-top: 1px solid var(--border-color);
-            padding: 15px 10px 35px; /* Extra padding para el "home bar" del iPhone */
+            padding: 15px 10px 40px;
             display: flex; justify-content: space-around; z-index: 900;
         }
 
         .summary-item { text-align: center; }
-        .summary-item .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px; }
-        .summary-item .value { font-size: 22px; font-weight: 700; }
-        .summary-item.main .value { color: var(--accent-green); font-size: 28px; }
-
-        @media (max-width: 600px) {
-            .semester-grid { grid-template-columns: 1fr; }
-            .header h1 { font-size: 28px; }
-        }
+        .summary-item .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
+        .summary-item .value { font-size: 24px; font-weight: 700; }
+        .summary-item.main .value { color: var(--accent-green); }
     </style>
 </head>
 <body>
@@ -175,31 +153,20 @@
     </div>
 </div>
 
-<!-- BOTÓN SIRI -->
 <div class="voice-trigger-container">
+    <div id="voice-status"></div>
     <button id="siri-btn" onclick="toggleVoice()">
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="white">
+        <svg width="35" height="35" viewBox="0 0 24 24" fill="white">
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
             <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
         </svg>
     </button>
-    <div id="voice-status"></div>
 </div>
 
-<!-- BARRA DE RESUMEN -->
 <div class="summary-bar">
-    <div class="summary-item">
-        <div class="label">S1</div>
-        <div class="value" id="res-s1">0.0</div>
-    </div>
-    <div class="summary-item main">
-        <div class="label">Anual</div>
-        <div class="value" id="res-anual">0.0</div>
-    </div>
-    <div class="summary-item">
-        <div class="label">S2</div>
-        <div class="value" id="res-s2">0.0</div>
-    </div>
+    <div class="summary-item"><div class="label">S1</div><div class="value" id="res-s1">0.0</div></div>
+    <div class="summary-item main"><div class="label">ANUAL</div><div class="value" id="res-anual">0.0</div></div>
+    <div class="summary-item"><div class="label">S2</div><div class="value" id="res-s2">0.0</div></div>
 </div>
 
 <script>
@@ -209,7 +176,7 @@
         "Antropología", "Promoción de vida saludable", "Estética y Política", "Geografía"
     ];
 
-    let data = JSON.parse(localStorage.getItem('grades_v3')) || { s1: {}, s2: {} };
+    let data = JSON.parse(localStorage.getItem('grades_v4')) || { s1: {}, s2: {} };
 
     function init() {
         for (let i = 0; i < 12; i++) {
@@ -219,7 +186,7 @@
         render();
     }
 
-    function save() { localStorage.setItem('grades_v3', JSON.stringify(data)); }
+    function save() { localStorage.setItem('grades_v4', JSON.stringify(data)); }
 
     const round5 = (v) => Math.round((v + Number.EPSILON) * 10) / 10;
 
@@ -234,13 +201,10 @@
                     <div class="subject-card">
                         <div class="subject-header">
                             <div class="subject-title-area"><h3>${name}</h3></div>
-                            <div class="avg-display">
-                                <div class="avg-label">${sem.toUpperCase()}</div>
-                                <div class="avg-value">${avg.toFixed(1)}</div>
-                            </div>
+                            <div class="avg-value">${avg.toFixed(1)}</div>
                         </div>
                         <div class="add-note-area">
-                            <input type="number" step="0.1" placeholder="Nota" id="in-${sem}-${i}">
+                            <input type="number" inputmode="decimal" step="0.1" placeholder="Nota" id="in-${sem}-${i}">
                             <button onclick="addNote('${sem}',${i})">+</button>
                         </div>
                         <div class="grades-container">
@@ -260,13 +224,11 @@
 
     function addNote(sem, i) {
         const inp = document.getElementById(`in-${sem}-${i}`);
-        const val = parseFloat(inp.value);
-        if (val >= 1 && val <= 7) { data[sem][i].push(val); save(); render(); }
+        const val = parseFloat(inp.value.replace(',', '.'));
+        if (val >= 1 && val <= 7) { data[sem][i].push(val); save(); render(); inp.value = ''; }
     }
 
-    function delNote(sem, i, idx) {
-        data[sem][i].splice(idx,1); save(); render();
-    }
+    function delNote(sem, i, idx) { data[sem][i].splice(idx,1); save(); render(); }
 
     function calc() {
         let sAvgs = { s1: [], s2: [] };
@@ -279,61 +241,68 @@
         const fs1 = sAvgs.s1.length > 0 ? round5(sAvgs.s1.reduce((a,b)=>a+b,0)/sAvgs.s1.length) : 0.0;
         const fs2 = sAvgs.s2.length > 0 ? round5(sAvgs.s2.reduce((a,b)=>a+b,0)/sAvgs.s2.length) : 0.0;
         let fa = (fs1 > 0 && fs2 > 0) ? round5((fs1+fs2)/2) : (fs1 || fs2);
-        
         document.getElementById('res-s1').innerText = fs1.toFixed(1);
         document.getElementById('res-s2').innerText = fs2.toFixed(1);
         document.getElementById('res-anual').innerText = fa.toFixed(1);
     }
 
-    // VOZ INTELIGENTE
-    let isListening = false;
+    // MEJORA DE RECONOCIMIENTO PARA IPHONE
     function toggleVoice() {
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.lang = 'es-CL';
+        recognition.interimResults = false;
+        
         const btn = document.getElementById('siri-btn');
         const status = document.getElementById('voice-status');
 
         recognition.onstart = () => { 
-            isListening = true; 
             btn.classList.add('listening'); 
             status.style.display = 'block';
-            status.innerText = "Escuchando...";
+            status.innerText = "Te escucho...";
         };
 
         recognition.onresult = (e) => {
-            const transcript = e.results[0][0].transcript.toLowerCase();
-            status.innerText = `"${transcript}"`;
+            let text = e.results[0][0].transcript.toLowerCase();
+            status.innerText = `Dijo: "${text}"`;
             
-            let grade = null;
-            const match = transcript.replace('punto','.').replace('coma','.').match(/\d+(\.\d+)?/);
-            if(match) {
-                grade = parseFloat(match[0]);
-                if(grade > 10) grade /= 10;
-            }
+            // Convertir números en palabras a dígitos (muy común en iPhone)
+            const numMap = {"uno":1,"dos":2,"tres":3,"cuatro":4,"cinco":5,"seis":6,"siete":7};
+            Object.keys(numMap).forEach(key => {
+                text = text.replace(new RegExp(key, 'g'), numMap[key]);
+            });
+
+            // Limpiar el texto para extraer la nota
+            let cleanText = text.replace(',', '.').replace(' y ', '.').replace(' coma ', '.').replace(' punto ', '.');
+            let gradeMatch = cleanText.match(/\d+(\.\d+)?/);
+            let grade = gradeMatch ? parseFloat(gradeMatch[0]) : null;
+
+            if (grade && grade > 10 && grade <= 70) grade /= 10; // Si dice "sesenta y cinco" -> 6.5
 
             let idx = -1;
-            if(transcript.includes("historia")) idx = 3;
-            else if(transcript.includes("geografía") && !transcript.includes("historia")) idx = 11;
-            else if(transcript.includes("ciencias") && (transcript.includes("ciudadanía") || transcript.includes("ciudadana"))) idx = 4;
+            if (text.includes("historia")) idx = 3;
+            else if (text.includes("geografía") && !text.includes("historia")) idx = 11;
+            else if (text.includes("ciencias") && (text.includes("ciudadanía") || text.includes("ciudadana"))) idx = 4;
             else {
                 subjects.forEach((s, i) => {
-                    const keywords = s.toLowerCase().split(' ');
-                    keywords.forEach(kw => { if(kw.length > 3 && transcript.includes(kw)) idx = i; });
+                    const words = s.toLowerCase().split(' ');
+                    words.forEach(w => { if(w.length > 3 && text.includes(w)) idx = i; });
                 });
             }
 
-            if(idx !== -1 && grade >= 1 && grade <= 7) {
-                const sem = transcript.includes('segundo') ? 's2' : 's1';
+            if (idx !== -1 && grade >= 1 && grade <= 7) {
+                const sem = text.includes('segundo') || text.includes('2') ? 's2' : 's1';
                 data[sem][idx].push(grade);
                 save(); render();
                 status.innerText = `✅ ${subjects[idx]}: ${grade.toFixed(1)}`;
-                setTimeout(() => status.style.display = 'none', 2000);
             } else {
-                status.innerText = "⚠️ No reconozco la materia o nota";
+                status.innerText = "❌ No entendí bien";
             }
+            setTimeout(() => status.style.display = 'none', 3000);
         };
 
-        recognition.onend = () => { isListening = false; btn.classList.remove('listening'); };
+        recognition.onend = () => { btn.classList.remove('listening'); };
+        recognition.onerror = () => { btn.classList.remove('listening'); status.innerText = "Error de micro"; };
+        
         recognition.start();
     }
 
