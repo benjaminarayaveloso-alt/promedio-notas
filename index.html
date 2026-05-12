@@ -585,39 +585,128 @@
     });
 
     function processOCRText(rawText) {
-        const lines = rawText.split('\n');
+        /*
+         * Formato NotasNet (según captura real):
+         *
+         *   Línea A: número de evaluación o etiqueta  →  "1"  "2"  "4"  "P"
+         *   Línea B: ponderación                      →  "100%"  "100%"  ...
+         *   Línea C: nota                             →  "6.6"  "7.0"  "6.8"
+         *
+         * Tesseract suele leer de izq a derecha y de arriba a abajo,
+         * entregando algo como:
+         *   "1  2  4  P"      (o en líneas separadas)
+         *   "100%  100%  100%  100%"
+         *   "6.6  7.0  6.8  6.8"
+         *
+         * Estrategia:
+         *   1. Limpiar el texto completo.
+         *   2. Detectar la materia en cualquier línea.
+         *   3. Recoger TODAS las notas válidas (1.0–7.0) que aparezcan
+         *      en una línea donde también haya un '%' (ponderación),
+         *      O en la línea inmediatamente siguiente a una línea con '%'.
+         *   4. Excluir bloques marcados con "P" o "PP" o "PA" (promedios).
+         */
+
+        const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let currentSubjectIdx = -1;
         const detectedResults = [];
 
+        // Detectar índices de líneas que son "de promedio" (etiqueta P/PP/PA)
+        // En NotasNet la etiqueta aparece ANTES del % y la nota.
+        // Marcamos qué posiciones en el texto corresponden a promedios.
+
+        // Paso 1: detectar materia en el texto completo primero
         lines.forEach(line => {
-            if (!line.trim()) return;
+            const idx = findBestSubject(line);
+            if (idx !== -1) currentSubjectIdx = idx;
+        });
 
-            // Intentar detectar materia en la línea
-            const foundIdx = findBestSubject(line);
-            if (foundIdx !== -1) currentSubjectIdx = foundIdx;
+        // Paso 2: construir grupos de 3 líneas (etiqueta / % / nota)
+        // trabajando sobre el texto completo tokenizado
+        const fullText = lines.join('\n');
 
-            // Buscar notas con % cerca (regla NotasNet):
-            // Acepta patrones: "7.0 15%" o "20% 6.5" o "6,5 20%"
-            const gradePattern = /([1-7][.,][0-9])(?=[^%\n]*%)|(?<=%)[^1-7\n]*([1-7][.,][0-9])/g;
-            let match;
+        // Extraer todos los tokens de nota que tengan un % en contexto cercano
+        // Buscamos bloques: [etiqueta]\n[N%]\n[nota] donde etiqueta != P/PP/PA/Finales
+        // También manejamos cuando vienen en la misma línea: "6.6 7.0 6.8"
+        // junto a una línea de porcentajes "100% 100% 100%"
 
-            if (currentSubjectIdx !== -1) {
-                while ((match = gradePattern.exec(line)) !== null) {
-                    const valStr = (match[1] || match[2]).replace(',', '.');
-                    const grade = parseFloat(valStr);
+        // Estrategia simplificada y robusta:
+        // Recorrer líneas buscando líneas de porcentajes, luego tomar
+        // la línea anterior y la siguiente para extraer notas,
+        // excluyendo las que estén bajo etiquetas P/PP/PA.
 
-                    // Evitar duplicados exactos en los resultados pendientes
-                    const isDup = detectedResults.some(r => r.subjectIdx === currentSubjectIdx && r.grade === grade);
-                    if (!isDup) {
-                        detectedResults.push({
-                            subjectIdx: currentSubjectIdx,
-                            grade: grade,
-                            added: false
-                        });
-                    }
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            // Actualizar materia si esta línea la contiene
+            const subIdx = findBestSubject(line);
+            if (subIdx !== -1) currentSubjectIdx = subIdx;
+
+            // ¿Es esta una línea de porcentajes?
+            const isPctLine = (line.match(/%/g) || []).length >= 1 && !/[1-7]\.[0-9]/.test(line);
+            if (!isPctLine) continue;
+            if (currentSubjectIdx === -1) continue;
+
+            // Contar cuántos % hay → cuántas evaluaciones en este grupo
+            const pctCount = (line.match(/%/g) || []).length;
+
+            // Buscar la línea de etiquetas (anterior) para detectar columnas P/PP/PA
+            const labelLine = i > 0 ? lines[i - 1] : '';
+            // Tokenizar etiquetas: separar por espacios
+            const labelTokens = labelLine.toUpperCase().split(/\s+/).filter(t => t.length > 0);
+            // Índices de columnas que son promedios
+            const promedioLabels = new Set(['P', 'PP', 'PA', 'PF', 'PROM']);
+            const isPromedioCol = labelTokens.map(t => promedioLabels.has(t));
+
+            // Buscar la línea de notas (siguiente que contenga notas)
+            let noteLine = '';
+            for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+                if (/[1-7][.,][0-9]/.test(lines[j])) {
+                    noteLine = lines[j];
+                    break;
                 }
             }
-        });
+            if (!noteLine) continue;
+
+            // Extraer notas de la línea de notas
+            const noteTokens = noteLine.match(/[1-7][.,][0-9]/g) || [];
+
+            noteTokens.forEach((token, colIdx) => {
+                // Si la columna corresponde a un promedio, saltar
+                if (isPromedioCol[colIdx]) return;
+
+                const grade = parseFloat(token.replace(',', '.'));
+                if (grade < 1.0 || grade > 7.0) return;
+
+                // Evitar duplicados
+                const isDup = detectedResults.some(r =>
+                    r.subjectIdx === currentSubjectIdx && r.grade === grade
+                );
+                // Permitir duplicados solo si la nota es diferente
+                // (ej: 6.8 puede aparecer varias veces legítimamente)
+                // → guardar todas, el usuario decide
+                detectedResults.push({
+                    subjectIdx: currentSubjectIdx,
+                    grade: grade,
+                    added: false
+                });
+            });
+        }
+
+        // Fallback: si no se encontró nada con la lógica de bloques,
+        // intentar extraer notas de cualquier línea que tenga % en la misma línea
+        if (detectedResults.length === 0 && currentSubjectIdx !== -1) {
+            lines.forEach(line => {
+                if (!/%/.test(line)) return;
+                const tokens = line.match(/[1-7][.,][0-9]/g) || [];
+                tokens.forEach(token => {
+                    const grade = parseFloat(token.replace(',', '.'));
+                    if (grade >= 1.0 && grade <= 7.0) {
+                        detectedResults.push({ subjectIdx: currentSubjectIdx, grade, added: false });
+                    }
+                });
+            });
+        }
 
         pendingOCRResults = detectedResults;
         renderOCRResults();
