@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Mis Notas - Benjamín</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
             --bg-color: #000000;
@@ -16,6 +17,7 @@
             --accent-blue: #0a84ff;
             --accent-green: #30d158;
             --accent-red: #ff453a;
+            --accent-orange: #ff9f0a;
             --siri-gradient: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 50%, #ae00ff 100%);
         }
 
@@ -31,10 +33,173 @@
         }
 
         .container { max-width: 900px; margin: 0 auto; }
-        .header { margin-bottom: 30px; }
+        .header { margin-bottom: 20px; }
         .header h1 { font-size: 34px; font-weight: 700; margin: 0; }
         .header p { color: var(--text-secondary); margin: 5px 0 0; }
 
+        /* === OCR SECTION === */
+        .ocr-card {
+            margin-top: 15px;
+            background: #1c1c1e;
+            padding: 16px;
+            border-radius: 14px;
+            border: 1px solid var(--accent-blue);
+        }
+
+        .ocr-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin: 0 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ocr-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .ocr-btn {
+            flex: 1;
+            min-width: 120px;
+            background: #2c2c2e;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .ocr-btn:active { background: #3a3a3c; }
+
+        .ocr-btn.primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        .ocr-btn.primary:active { background: #0070d8; }
+
+        .ocr-btn.danger {
+            background: transparent;
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+        .ocr-btn.danger:active { background: rgba(255,69,58,0.15); }
+
+        #imageInput { display: none; }
+
+        /* OCR Progress */
+        #ocr-status {
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: #2c2c2e;
+            border-radius: 10px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .ocr-progress-bar-wrap {
+            margin-top: 8px;
+            background: #3a3a3c;
+            border-radius: 4px;
+            height: 4px;
+            overflow: hidden;
+            display: none;
+        }
+        .ocr-progress-bar {
+            height: 100%;
+            background: var(--accent-blue);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        /* OCR Preview */
+        #ocr-preview-wrap {
+            margin-top: 10px;
+            display: none;
+        }
+        #ocr-preview {
+            max-width: 100%;
+            max-height: 150px;
+            border-radius: 8px;
+            object-fit: contain;
+            border: 1px solid var(--border-color);
+        }
+
+        /* OCR Results */
+        #ocr-results {
+            display: none;
+            margin-top: 12px;
+        }
+        .ocr-result-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .ocr-result-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #2c2c2e;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        .ocr-result-subject { color: var(--text-secondary); font-size: 12px; }
+        .ocr-result-grade { font-weight: 700; color: var(--accent-green); font-size: 15px; }
+        .ocr-result-grade.low { color: var(--accent-red); }
+        .ocr-result-grade.mid { color: var(--accent-orange); }
+        .ocr-result-btn {
+            background: var(--accent-blue);
+            border: none;
+            color: white;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .ocr-result-btn.added {
+            background: var(--accent-green);
+        }
+
+        .ocr-sem-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .sem-pill {
+            flex: 1;
+            padding: 7px;
+            text-align: center;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            background: #2c2c2e;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+        .sem-pill.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        /* === GRID Y CARDS === */
         .semester-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -72,6 +237,7 @@
         .add-note-area button {
             background: var(--accent-blue); color: white; border: none;
             width: 34px; height: 34px; border-radius: 10px; font-weight: bold;
+            cursor: pointer;
         }
 
         .grades-container { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -88,8 +254,11 @@
             position: absolute; top: -8px; right: -8px;
             background: var(--accent-red); color: white; border: none;
             border-radius: 50%; width: 20px; height: 20px; font-size: 14px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            line-height: 1;
         }
 
+        /* === VOICE === */
         .voice-trigger-container {
             position: fixed; bottom: 110px; left: 50%;
             transform: translateX(-50%); z-index: 1000;
@@ -107,7 +276,6 @@
         }
 
         #siri-btn:active { transform: scale(0.9); }
-
         #siri-btn.listening { animation: pulse 1.2s infinite linear; }
 
         @keyframes pulse {
@@ -123,6 +291,7 @@
             backdrop-filter: blur(10px);
         }
 
+        /* === SUMMARY BAR === */
         .summary-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
             background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(20px);
@@ -135,6 +304,37 @@
         .summary-item .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
         .summary-item .value { font-size: 24px; font-weight: 700; }
         .summary-item.main .value { color: var(--accent-green); }
+
+        /* === MODAL CONFIRM CLEAR === */
+        .modal-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal-sheet {
+            background: #2c2c2e;
+            border-radius: 14px 14px 0 0;
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .modal-title { font-size: 17px; font-weight: 600; text-align: center; margin-bottom: 8px; }
+        .modal-desc { font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 20px; }
+        .modal-actions { display: flex; flex-direction: column; gap: 10px; }
+        .modal-btn {
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-size: 17px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .modal-btn.destructive { background: var(--accent-red); color: white; }
+        .modal-btn.cancel { background: #3a3a3c; color: white; }
     </style>
 </head>
 <body>
@@ -143,6 +343,53 @@
     <div class="header">
         <h1>Mis Notas</h1>
         <p>Benjamín Araya • 4to Medio</p>
+
+        <!-- OCR CARD -->
+        <div class="ocr-card">
+            <p class="ocr-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                Importar desde NotasNet
+            </p>
+
+            <!-- Selector de semestre para OCR -->
+            <div class="ocr-sem-selector">
+                <div class="sem-pill active" id="pill-s1" onclick="selectOCRSem('s1')">1° Semestre</div>
+                <div class="sem-pill" id="pill-s2" onclick="selectOCRSem('s2')">2° Semestre</div>
+            </div>
+
+            <div class="ocr-buttons">
+                <button class="ocr-btn primary" onclick="document.getElementById('imageInput').click()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Subir captura
+                </button>
+                <button class="ocr-btn danger" onclick="showClearModal()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                    Limpiar notas
+                </button>
+            </div>
+
+            <input type="file" id="imageInput" accept="image/*" capture="environment">
+
+            <!-- Preview imagen -->
+            <div id="ocr-preview-wrap">
+                <img id="ocr-preview" src="" alt="Vista previa">
+            </div>
+
+            <!-- Status + barra de progreso -->
+            <div id="ocr-status"></div>
+            <div class="ocr-progress-bar-wrap" id="ocr-progress-wrap">
+                <div class="ocr-progress-bar" id="ocr-progress-bar"></div>
+            </div>
+
+            <!-- Resultados detectados -->
+            <div id="ocr-results">
+                <p class="ocr-result-title">Notas detectadas</p>
+                <div id="ocr-results-list"></div>
+                <button class="ocr-btn primary" style="margin-top:8px; width:100%;" onclick="addAllOCRResults()">
+                    ✅ Agregar todas
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="semester-grid">
@@ -157,6 +404,7 @@
     </div>
 </div>
 
+<!-- Voz -->
 <div class="voice-trigger-container">
     <div id="voice-status"></div>
     <button id="siri-btn" onclick="toggleVoice()">
@@ -167,20 +415,32 @@
     </button>
 </div>
 
+<!-- Summary bar -->
 <div class="summary-bar">
     <div class="summary-item"><div class="label">S1</div><div class="value" id="res-s1">0.0</div></div>
     <div class="summary-item main"><div class="label">ANUAL</div><div class="value" id="res-anual">0.0</div></div>
     <div class="summary-item"><div class="label">S2</div><div class="value" id="res-s2">0.0</div></div>
 </div>
 
+<!-- Modal limpiar notas -->
+<div class="modal-overlay" id="clear-modal">
+    <div class="modal-sheet">
+        <p class="modal-title">⚠️ Limpiar todas las notas</p>
+        <p class="modal-desc">Esto eliminará permanentemente todas las notas de ambos semestres. Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+            <button class="modal-btn destructive" onclick="confirmClear()">Eliminar todo</button>
+            <button class="modal-btn cancel" onclick="hideClearModal()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const subjects = [
-        "Lengua y Literatura", "Matemática", "Inglés", "Historia y Geografía", 
+        "Lengua y Literatura", "Matemática", "Inglés", "Historia y Geografía",
         "Ciencias Ciudadanas", "Educación ciudadana", "Educación Física", "Filosofía",
         "Antropología", "Promoción de vida saludable", "Estética y Política", "Geografía"
     ];
 
-    // Sinónimos para ayudar a la IA
     const aliases = {
         0: ["lenguaje", "lengua", "literatura"],
         1: ["mate", "matematica", "mates"],
@@ -191,6 +451,8 @@
     };
 
     let data = JSON.parse(localStorage.getItem('grades_v4')) || { s1: {}, s2: {} };
+    let ocrSem = 's1';
+    let pendingOCRResults = []; // [{subjectIdx, grade, added}]
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
@@ -213,21 +475,17 @@
     function save() { localStorage.setItem('grades_v4', JSON.stringify(data)); }
 
     const round5 = (v) => Math.round((v + Number.EPSILON) * 10) / 10;
-
-    // --- UTILIDADES DE INTELIGENCIA ---
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
     function parseGrade(text) {
         const numMap = {"uno":1,"dos":2,"tres":3,"cuatro":4,"cinco":5,"seis":6,"siete":7};
         let t = text;
         Object.keys(numMap).forEach(key => t = t.replace(new RegExp(key, 'g'), numMap[key]));
-        
         let clean = t.replace(',', '.').replace(/ y /g, '.').replace(/ coma /g, '.').replace(/ punto /g, '.');
         let match = clean.match(/\d+(\.\d+)?/);
         if (!match) return null;
-        
         let n = parseFloat(match[0]);
-        if (n > 10 && n <= 70) n /= 10; // "sesenta y cinco" -> 6.5
+        if (n > 10 && n <= 70) n /= 10;
         return (n >= 1 && n <= 7) ? n : null;
     }
 
@@ -239,33 +497,232 @@
         subjects.forEach((name, i) => {
             let score = 0;
             const nName = normalize(name);
-            
-            // Si la frase exacta está en el texto (ej: "educacion ciudadana")
             if (cleanInput.includes(nName)) score += 10;
-            
-            // Por cada palabra coincidente
             const words = nName.split(' ');
-            words.forEach(w => {
-                if (w.length > 3 && cleanInput.includes(w)) score += 2;
-            });
-
-            // Revisar alias
+            words.forEach(w => { if (w.length > 3 && cleanInput.includes(w)) score += 2; });
             if (aliases[i]) {
                 aliases[i].forEach(alias => {
                     if (cleanInput.includes(normalize(alias))) score += 5;
                 });
             }
-
-            if (score > maxScore) {
-                maxScore = score;
-                bestIdx = i;
-            }
+            if (score > maxScore) { maxScore = score; bestIdx = i; }
         });
 
         return maxScore > 1 ? bestIdx : -1;
     }
 
-    // --- FUNCIONES CORE ---
+    // ============================================
+    // OCR SECTION
+    // ============================================
+
+    function selectOCRSem(sem) {
+        ocrSem = sem;
+        document.getElementById('pill-s1').classList.toggle('active', sem === 's1');
+        document.getElementById('pill-s2').classList.toggle('active', sem === 's2');
+    }
+
+    document.getElementById('imageInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Mostrar preview
+        const previewWrap = document.getElementById('ocr-preview-wrap');
+        const preview = document.getElementById('ocr-preview');
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            preview.src = ev.target.result;
+            previewWrap.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+
+        // Reset resultados anteriores
+        pendingOCRResults = [];
+        document.getElementById('ocr-results').style.display = 'none';
+
+        // Mostrar status y barra
+        const status = document.getElementById('ocr-status');
+        const progressWrap = document.getElementById('ocr-progress-wrap');
+        const progressBar = document.getElementById('ocr-progress-bar');
+
+        status.style.display = 'block';
+        status.style.color = 'var(--accent-blue)';
+        status.innerText = '🔍 Analizando imagen...';
+        progressWrap.style.display = 'block';
+        progressBar.style.width = '0%';
+
+        Tesseract.recognize(file, 'spa', {
+            logger: m => {
+                if (m.status === 'recognizing text' || m.status === 'recognizing-text') {
+                    const pct = Math.round(m.progress * 100);
+                    status.innerText = `Procesando: ${pct}%`;
+                    progressBar.style.width = pct + '%';
+                } else if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata') {
+                    status.innerText = '⏳ Cargando motor OCR...';
+                }
+            }
+        }).then(({ data: { text } }) => {
+            progressBar.style.width = '100%';
+            const found = processOCRText(text);
+
+            if (found > 0) {
+                status.style.color = 'var(--accent-green)';
+                status.innerText = `✅ Se detectaron ${found} nota(s). Revísalas abajo.`;
+            } else {
+                status.style.color = 'var(--accent-red)';
+                status.innerText = '⚠️ No se detectaron notas. Intenta con una imagen más clara.';
+            }
+
+            setTimeout(() => { progressWrap.style.display = 'none'; }, 1000);
+
+            // Reset input para permitir subir la misma imagen de nuevo
+            e.target.value = '';
+        }).catch(err => {
+            status.style.color = 'var(--accent-red)';
+            status.innerText = '❌ Error al procesar la imagen.';
+            progressWrap.style.display = 'none';
+            console.error(err);
+        });
+    });
+
+    function processOCRText(rawText) {
+        const lines = rawText.split('\n');
+        let currentSubjectIdx = -1;
+        const detectedResults = [];
+
+        lines.forEach(line => {
+            if (!line.trim()) return;
+
+            // Intentar detectar materia en la línea
+            const foundIdx = findBestSubject(line);
+            if (foundIdx !== -1) currentSubjectIdx = foundIdx;
+
+            // Buscar notas con % cerca (regla NotasNet):
+            // Acepta patrones: "7.0 15%" o "20% 6.5" o "6,5 20%"
+            const gradePattern = /([1-7][.,][0-9])(?=[^%\n]*%)|(?<=%)[^1-7\n]*([1-7][.,][0-9])/g;
+            let match;
+
+            if (currentSubjectIdx !== -1) {
+                while ((match = gradePattern.exec(line)) !== null) {
+                    const valStr = (match[1] || match[2]).replace(',', '.');
+                    const grade = parseFloat(valStr);
+
+                    // Evitar duplicados exactos en los resultados pendientes
+                    const isDup = detectedResults.some(r => r.subjectIdx === currentSubjectIdx && r.grade === grade);
+                    if (!isDup) {
+                        detectedResults.push({
+                            subjectIdx: currentSubjectIdx,
+                            grade: grade,
+                            added: false
+                        });
+                    }
+                }
+            }
+        });
+
+        pendingOCRResults = detectedResults;
+        renderOCRResults();
+        return detectedResults.length;
+    }
+
+    function renderOCRResults() {
+        const container = document.getElementById('ocr-results');
+        const list = document.getElementById('ocr-results-list');
+
+        if (pendingOCRResults.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        list.innerHTML = '';
+
+        pendingOCRResults.forEach((item, idx) => {
+            const gradeClass = item.grade >= 4 ? 'accent-green' : (item.grade >= 3 ? 'mid' : 'low');
+            const colorClass = item.grade >= 4 ? '' : (item.grade >= 3 ? 'mid' : 'low');
+
+            list.innerHTML += `
+                <div class="ocr-result-item" id="ocr-item-${idx}">
+                    <div>
+                        <div class="ocr-result-subject">${subjects[item.subjectIdx]}</div>
+                        <div class="ocr-result-grade ${colorClass}">${item.grade.toFixed(1)}</div>
+                    </div>
+                    <button class="ocr-result-btn ${item.added ? 'added' : ''}"
+                        id="ocr-btn-${idx}"
+                        onclick="addSingleOCRResult(${idx})"
+                        ${item.added ? 'disabled' : ''}>
+                        ${item.added ? '✓ Agregada' : 'Agregar'}
+                    </button>
+                </div>`;
+        });
+    }
+
+    function addSingleOCRResult(idx) {
+        const item = pendingOCRResults[idx];
+        if (!item || item.added) return;
+
+        data[ocrSem][item.subjectIdx].push(item.grade);
+        pendingOCRResults[idx].added = true;
+
+        // Actualizar UI del botón sin re-render completo
+        const btn = document.getElementById(`ocr-btn-${idx}`);
+        if (btn) {
+            btn.innerText = '✓ Agregada';
+            btn.classList.add('added');
+            btn.disabled = true;
+        }
+
+        save();
+        render();
+    }
+
+    function addAllOCRResults() {
+        pendingOCRResults.forEach((item, idx) => {
+            if (!item.added) {
+                data[ocrSem][item.subjectIdx].push(item.grade);
+                pendingOCRResults[idx].added = true;
+            }
+        });
+        save();
+        render();
+        renderOCRResults();
+
+        const status = document.getElementById('ocr-status');
+        status.style.color = 'var(--accent-green)';
+        status.innerText = `✅ Todas las notas agregadas al ${ocrSem === 's1' ? '1°' : '2°'} Semestre`;
+    }
+
+    // ============================================
+    // CLEAR MODAL
+    // ============================================
+
+    function showClearModal() {
+        document.getElementById('clear-modal').classList.add('visible');
+    }
+
+    function hideClearModal() {
+        document.getElementById('clear-modal').classList.remove('visible');
+    }
+
+    function confirmClear() {
+        for (let i = 0; i < 12; i++) {
+            data.s1[i] = [];
+            data.s2[i] = [];
+        }
+        save();
+        render();
+        hideClearModal();
+
+        // Limpiar también los resultados OCR pendientes
+        pendingOCRResults = [];
+        document.getElementById('ocr-results').style.display = 'none';
+        document.getElementById('ocr-preview-wrap').style.display = 'none';
+        document.getElementById('ocr-status').style.display = 'none';
+    }
+
+    // ============================================
+    // RENDER & CALC
+    // ============================================
+
     function render() {
         ['s1', 's2'].forEach(sem => {
             const cont = document.getElementById(`container-${sem}`);
@@ -273,11 +730,12 @@
             subjects.forEach((name, i) => {
                 const gr = data[sem][i];
                 const avg = gr.length > 0 ? round5(gr.reduce((a,b)=>a+b,0)/gr.length) : 0.0;
+                const avgColor = avg === 0 ? 'white' : (avg >= 4 ? 'var(--accent-green)' : (avg >= 3 ? 'var(--accent-orange)' : 'var(--accent-red)'));
                 cont.innerHTML += `
                     <div class="subject-card">
                         <div class="subject-header">
                             <div class="subject-title-area"><h3>${name}</h3></div>
-                            <div class="avg-value">${avg.toFixed(1)}</div>
+                            <div class="avg-value" style="color:${avgColor}">${avg.toFixed(1)}</div>
                         </div>
                         <div class="add-note-area">
                             <input type="number" inputmode="decimal" step="0.1" placeholder="Nota" id="in-${sem}-${i}">
@@ -322,13 +780,17 @@
         document.getElementById('res-anual').innerText = fa.toFixed(1);
     }
 
+    // ============================================
+    // VOZ
+    // ============================================
+
     function toggleVoice() {
         if (!recognition) return alert("Micro no soportado");
         const btn = document.getElementById('siri-btn');
         const status = document.getElementById('voice-status');
 
-        recognition.onstart = () => { 
-            btn.classList.add('listening'); 
+        recognition.onstart = () => {
+            btn.classList.add('listening');
             status.style.display = 'block';
             status.innerText = "Te escucho...";
         };
@@ -348,8 +810,8 @@
             }
         };
 
-        recognition.onend = () => { 
-            btn.classList.remove('listening'); 
+        recognition.onend = () => {
+            btn.classList.remove('listening');
             setTimeout(() => status.style.display = 'none', 3000);
         };
 
